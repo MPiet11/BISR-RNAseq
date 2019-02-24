@@ -1,0 +1,24 @@
+Step for a successful RNAseq analysis:
+
+1. Copy directory /fs/project/PCON0005/BISR/workflows/RNAseq_pipeline_current to your own space and change the directory name to something useful relating to your project.
+2. Place fastq files in fastq directory.  Workflow should work on gzipped or ungzipped fastq.  You can delete the test fastq.
+3. Make a tab delimited 'samples' file formatted as "R1.fastq	R2.fastq	Name"
+	3a. If your RNAseq is single end, you still need an R2.fastq listing but it can be NA or NULL, anything to provide a placeholder in the second column
+4. Editing the config_and_run.sh (check "example_configs" directory for other non-human species):
+	4a. Paste the full path of your working directory after PROJECT_DIR=
+	4b. The default pbsscript will run a standard hisat2 for paired end fastq.  If you want to run stringtie later, use hisat2_rnaseq_dta.pbs or if you have single end reads, use hisat2_rnaseq_single.pbs
+	4c. If your sample file is named anything other than "samples" change the name on the SAMPLELIST line
+	4d. Set REF, GTF, RIBOBED, and BED based on your species of interest.  REF should be the path to the hisat2 formatted indexes and the base name of the indexes.  If your genome has not been indexed for hisat2, use hisat2-build to generate from your own fasta reference.
+	4e. Make sure your assigned RIBOBED and BED have the same chromosome names as your reference file (with "chr" or without "chr")
+	4f. The default featureCounts used in the pbs scripts counts the primary read for multimapped reads.  The strandedness parameter is not set so it will count any read pair regardless of orientation.  If you want to count only the properly oriented pairs, check the infer_experiment.py results from RSeQC and set -s 2 for reverse stranded and -s 1 for forward stranded.
+5. Execute the pipeline by running "./config_and_run.sh" from your working directory which will use "submit_pbs.sh" to create output directories and to submit jobs of the pbs script you specified in the config script
+	
+6. After all sample jobs have finished, run "qsub rnaseq_final_reports.sh" to generate final report files that will be copied to directory "rseqc_reports"  Use "oneSample_rnaseq_final_reports.sh" if you only have one sample as the handling for junciton and ribosomal QC is a little different.  Make sure the R package data.table is installed in whatever version of R you intend to use.  Default R in script is R/3.5.0 
+
+Commands for installing data.table package:
+module load R/3.5.0
+R
+install.packages(c("data.table"))
+
+follow the prompts for library locations (likely /R/x86_64-pc-linux-gnu-library/3.5) and CRAN mirror choice
+

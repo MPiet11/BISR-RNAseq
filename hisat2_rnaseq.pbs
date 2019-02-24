@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -l nodes=1:ppn=14
+#PBS -l mem=112gb
+#PBS -l walltime=20:00:00
+#PBS -A PCON0005
+cd $PBS_O_WORKDIR
+
+module load samtools/1.6
+module load hisat2/2.1.0
+
+/fs/project/PCON0005/BISR/programs/FastQC_0.11.7/fastqc  -o  fastqc_out $R1
+/fs/project/PCON0005/BISR/programs/FastQC_0.11.7/fastqc  -o  fastqc_out $R2
+
+
+#NOTE: run with --dta if you intend to use stringtie later
+
+#REF=$REF
+hisat2 -p 12 --new-summary --summary-file $OUTPUT.hisat2.summary -x $REF -1 $R1  -2 $R2 -S $OUTPUT.sam
+
+#1-Convert sam to bam
+samtools view -bS -o $OUTPUT.bam $OUTPUT.sam
+
+# 2- Sort bam file
+samtools sort $OUTPUT.bam  -o $OUTPUT.sorted.bam
+
+# 3- Generate index for bam file
+samtools index $OUTPUT.sorted.bam
+
+
+module load R/3.5.0
+module load python/2.7
+export PYTHONPATH=/users/PAS1208/osu0972/.local/lib/python2.7/site-packages
+export PATH=$PATH:/users/PAS1208/osu0972/.local/bin
+
+#RIBOBED=/fs/project/PCON0005/BISR/reference/HISAT2/Homo_sapiens/grch38/GRCh38_rRNA.bed
+#BED=/fs/project/PCON0005/BISR/reference/HISAT2/Homo_sapiens/grch38/hg38_GENCODE_v23.bed
+
+junction_annotation.py -i $OUTPUT.sorted.bam -o $POSTALN_OUT\_junc -r $BED
+read_distribution.py  -i $OUTPUT.sorted.bam -r $BED > $POSTALN_OUT\_readdist
+infer_experiment.py -r $BED -i $OUTPUT.sorted.bam > $POSTALN_OUT\_infer
+split_bam.py -i $OUTPUT.sorted.bam  -r $RIBOBED -o $POSTALN_OUT\_ribo
+
+java -Xmx4g  -jar /fs/project/PCON0005/BISR/programs/picard-tools-2.4.1/picard.jar CollectInsertSizeMetrics I=$OUTPUT.sorted.bam  O=$POSTALN_OUT.insert_size_metrics.txt H=$POSTALN_OUT.insert_size_histogram.pdf M=0.5 VALIDATION_STRINGENCY=LENIENT
+
+java -Xmx4g   -jar /fs/project/PCON0005/BISR/programs/picard-tools-2.4.1/picard.jar MarkDuplicates I=$OUTPUT.sorted.bam  O=$POSTALN_OUT.marked_duplicates.bam M=$POSTALN_OUT.marked_dup_metrics.txt VALIDATION_STRINGENCY=LENIENT
+
+/fs/project/PCON0005/BISR/programs/subread-1.5.1/bin/featureCounts -T 14 -a $GTF   --primary -p   -o $FEATURE_OUTPUT.featurecounts $OUTPUT.sorted.bam
+
+
+#/fs/project/PCON0005/BISR/programs/subread-1.5.1/bin/featureCounts -a $GTF   -s 2 --primary -p   -o $FEATURE_OUTPUT.featurecounts $OUTPUT.sorted.bam
